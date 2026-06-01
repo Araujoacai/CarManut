@@ -3,6 +3,7 @@
   "short_name": "CarManut",
   "description": "Acompanhamento inteligente de manutenção veicular",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0a0a0a",
