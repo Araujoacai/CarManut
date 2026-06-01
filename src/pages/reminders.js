@@ -3,6 +3,7 @@
 // ============================================================
 import { getVehicles, getServices, buildLastServiceMap } from '../db.js';
 import { MAINTENANCE_ITEMS, calcMaintenanceStatus, formatDate } from '../maintenance-data.js';
+import { openQuickRegisterModal } from '../components/quick-register-modal.js';
 import { router } from '../app.js';
 
 export async function renderReminders(container, user) {
@@ -59,6 +60,29 @@ export async function renderReminders(container, user) {
     else badge.classList.add('hidden');
   }
 
+  // ---- funções locais ----
+  function bindEditButtons(user) {
+    document.querySelectorAll('.btn-edit-reminder-global').forEach(btn => {
+      btn.replaceWith(btn.cloneNode(true));
+    });
+    document.querySelectorAll('.btn-edit-reminder-global').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const itemId    = btn.dataset.itemId;
+        const vehicleId = btn.dataset.vehicleId;
+        const entry     = allItems.find(x => x.item.id === itemId && x.vehicle.id === vehicleId);
+        if (!entry) return;
+        openQuickRegisterModal({
+          item:        entry.item,
+          vehicle:     entry.vehicle,
+          user,
+          lastService: entry.last || null,
+          onSaved:     () => renderReminders(container, user),
+        });
+      });
+    });
+  }
+
   let currentFilter = 'all';
 
   function renderList(filter) {
@@ -72,16 +96,32 @@ export async function renderReminders(container, user) {
 
     return filtered.map(({ item, vehicle, status, last }) => {
       const pct = Math.min(status.percent, 100);
+      const lastKmFmt   = last ? Number(last.km||0).toLocaleString('pt-BR') + ' km' : null;
+      const lastDateFmt = last ? formatDate(last.date) : null;
       return `
         <div class="reminder-item ${status.status}" data-vehicle-id="${vehicle.id}">
           <div class="reminder-header">
-            <div>
+            <div style="flex:1;min-width:0;">
               <div class="reminder-title">${item.emoji} ${item.name}</div>
               <div class="reminder-vehicle">${vehicle.emoji||'🚗'} ${vehicle.make} ${vehicle.model} · ${Number(vehicle.currentKm||0).toLocaleString('pt-BR')} km</div>
             </div>
-            <span class="reminder-status ${status.status}">
-              ${status.status === 'overdue' ? '🔴 Vencido' : status.status === 'warning' ? '⚠️ Atenção' : '✅ OK'}
-            </span>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;margin-left:8px;">
+              <span class="reminder-status ${status.status}">
+                ${status.status === 'overdue' ? '🔴 Vencido' : status.status === 'warning' ? '⚠️ Atenção' : '✅ OK'}
+              </span>
+              <button
+                class="btn-edit-reminder-global"
+                data-item-id="${item.id}"
+                data-vehicle-id="${vehicle.id}"
+                style="
+                  padding:4px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;
+                  background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);
+                  color:var(--amber-500);cursor:pointer;white-space:nowrap;
+                  transition:all 0.15s;
+                ">
+                ✏️ ${last ? 'Editar' : 'Registrar'}
+              </button>
+            </div>
           </div>
           <div class="reminder-progress">
             <div class="progress-track">
@@ -92,9 +132,12 @@ export async function renderReminders(container, user) {
               <span>${status.label}</span>
             </div>
           </div>
-          <div class="reminder-footer">
+          <div class="reminder-footer" style="flex-wrap:wrap;gap:4px;">
             <div class="reminder-km-info">
-              ${last ? `Último: <strong>${Number(last.km||0).toLocaleString('pt-BR')} km</strong> em <strong>${formatDate(last.date)}</strong>` : '<span style="color:var(--text-muted)">Nunca registrado</span>'}
+              ${last
+                ? `Último: <strong>${lastKmFmt}</strong> em <strong>${lastDateFmt}</strong>`
+                : '<span style="color:var(--text-muted)">Nunca registrado</span>'
+              }
             </div>
             <button class="btn-register-small goto-vehicle" data-vehicle-id="${vehicle.id}">Ver Veículo</button>
           </div>
@@ -106,14 +149,14 @@ export async function renderReminders(container, user) {
   container.innerHTML = `
     <div class="reminders-page page">
       <div style="margin-bottom:16px;">
-        <div class="greeting-text" style="font-size:1.3rem;">Lembretes <span style="color:var(--amber-500);">${overdueTotal > 0 ? `(${overdueTotal} vencido${overdueTotal!==1?'s':''})` : '✅'}</span></div>
+        <div class="greeting-text" style="font-size:1.3rem;">Lembretes <span style="color:var(--amber-500);">${overdueTotal > 0 ? `(${overdueTotal} vencido${overdueTotal!==1?'s':''})` : '\u2705'}</span></div>
         <div class="greeting-sub">${vehicles.length} veículo${vehicles.length!==1?'s':''} · ${allItems.length} itens monitorados</div>
       </div>
 
       <div class="filter-chips">
         <button class="filter-chip active" data-filter="all">Todos (${allItems.length})</button>
         <button class="filter-chip" data-filter="urgent">
-          🚨 Urgente (${overdueTotal + warnTotal})
+          \ud83d\udea8 Urgente (${overdueTotal + warnTotal})
         </button>
         <button class="filter-chip" data-filter="overdue">🔴 Vencido (${overdueTotal})</button>
         <button class="filter-chip" data-filter="warning">⚠️ Atenção (${warnTotal})</button>
@@ -133,13 +176,15 @@ export async function renderReminders(container, user) {
       chip.classList.add('active');
       currentFilter = chip.dataset.filter;
       document.getElementById('reminders-list').innerHTML = renderList(currentFilter);
-
+      bindEditButtons(user);
       // Re-bind goto buttons
       document.querySelectorAll('.goto-vehicle').forEach(btn => {
         btn.addEventListener('click', () => router.navigate('vehicle-detail', { vehicleId: btn.dataset.vehicleId }));
       });
     });
   });
+
+  bindEditButtons(user);
 
   // Goto vehicle buttons
   document.querySelectorAll('.goto-vehicle').forEach(btn => {

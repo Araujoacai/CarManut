@@ -4,7 +4,14 @@
 import { getVehicle, getServices, updateKm, deleteService, buildLastServiceMap } from '../db.js';
 import { MAINTENANCE_ITEMS, calcMaintenanceStatus, formatKm, formatDate, formatCurrency, SERVICE_CATEGORIES } from '../maintenance-data.js';
 import { showToast } from '../components/toast.js';
+import { openQuickRegisterModal } from '../components/quick-register-modal.js';
 import { router } from '../app.js';
+
+// Referências vivas para os event listeners dos botões de editar
+let _vehicle = null;
+let _lastMap = {};
+let _user    = null;
+let _reloadFn = null;
 
 export async function renderVehicleDetail(container, user, params = {}) {
   const { vehicleId } = params;
@@ -27,7 +34,12 @@ export async function renderVehicleDetail(container, user, params = {}) {
   if (!vehicle) { router.navigate('home'); return; }
 
   const lastMap = buildLastServiceMap(services);
-  const fuelLabel = getFuelLabel(vehicle.fuel);
+  _vehicle  = vehicle;
+  _lastMap  = lastMap;
+  _user     = user;
+  _reloadFn = () => renderVehicleDetail(container, user, params);
+
+  const fuelLabel  = getFuelLabel(vehicle.fuel);
   const transLabel = getTransLabel(vehicle.transmission);
 
   // Calculate overall alert status
@@ -35,6 +47,7 @@ export async function renderVehicleDetail(container, user, params = {}) {
     const last = lastMap[item.id];
     return {
       ...item,
+      last,
       status: calcMaintenanceStatus(item, last?.km ?? null, last?.date ?? null, vehicle.currentKm || 0)
     };
   });
@@ -154,6 +167,9 @@ export async function renderVehicleDetail(container, user, params = {}) {
     router.navigate('vehicle-form', { vehicleId });
   });
 
+  // Botões de editar/registrar item de manutenção (aba Revisões)
+  bindReminderEditButtons();
+
   // Delete service
   document.querySelectorAll('.btn-delete-service').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -168,6 +184,15 @@ export async function renderVehicleDetail(container, user, params = {}) {
       }
     });
   });
+
+  // Re-bind quando trocar de aba (histórico não tem esses botões)
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.tab === 'reminders') {
+        requestAnimationFrame(bindReminderEditButtons);
+      }
+    });
+  });
 }
 
 function renderRemindersTab(itemStatuses, vehicle) {
@@ -177,39 +202,87 @@ function renderRemindersTab(itemStatuses, vehicle) {
   });
 
   return sorted.map(item => {
-    const s = item.status;
+    const s   = item.status;
     const pct = Math.min(s.percent, 100);
+    const last = item.last;
+    const lastKmFmt  = last ? Number(last.km||0).toLocaleString('pt-BR') + ' km' : null;
+    const lastDateFmt = last ? formatDate(last.date) : null;
 
     return `
       <div class="reminder-item ${s.status}">
         <div class="reminder-header">
-          <div>
+          <div style="flex:1;min-width:0;">
             <div class="reminder-title">${item.emoji} ${item.name}</div>
-            <div class="reminder-vehicle" style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">${item.note || ''}</div>
+            ${item.note ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;line-height:1.4;">${item.note}</div>` : ''}
           </div>
-          <span class="reminder-status ${s.status}">
-            ${s.status === 'overdue' ? '🔴 Vencido' : s.status === 'warning' ? '⚠️ Atenção' : '✅ OK'}
-          </span>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;margin-left:8px;">
+            <span class="reminder-status ${s.status}">
+              ${s.status === 'overdue' ? '🔴 Vencido' : s.status === 'warning' ? '⚠️ Atenção' : '✅ OK'}
+            </span>
+            <button
+              class="btn-edit-reminder"
+              data-item-id="${item.id}"
+              style="
+                padding:4px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;
+                background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);
+                color:var(--amber-500);cursor:pointer;white-space:nowrap;
+                transition:all 0.15s;
+              ">
+              ✏️ ${last ? 'Editar' : 'Registrar'}
+            </button>
+          </div>
         </div>
+
         <div class="reminder-progress">
           <div class="progress-track">
             <div class="progress-fill ${s.status}" style="width:${pct}%;"></div>
           </div>
           <div class="progress-labels">
-            <span>${item.kmInterval ? `a cada ${item.kmInterval.toLocaleString('pt-BR')} km` : ''}</span>
+            <span>${item.kmInterval ? `a cada ${item.kmInterval.toLocaleString('pt-BR')} km` : item.monthInterval ? `a cada ${item.monthInterval} meses` : ''}</span>
             <span>${s.label}</span>
           </div>
         </div>
-        <div class="reminder-footer">
+
+        <div class="reminder-footer" style="flex-wrap:wrap;gap:4px;">
           <div class="reminder-km-info">
-            ${s.nextKm ? `Próx: <strong>${s.nextKm.toLocaleString('pt-BR')} km</strong>` : ''}
-            ${s.nextDate ? ` · <strong>${formatDate(s.nextDate)}</strong>` : ''}
-            ${!s.nextKm && !s.nextDate ? '<span style="color:var(--text-muted)">Nunca registrado</span>' : ''}
+            ${last
+              ? `Último: <strong>${lastKmFmt}</strong> em <strong>${lastDateFmt}</strong>`
+              : '<span style="color:var(--text-muted)">Nunca registrado — clique em Registrar</span>'
+            }
           </div>
+          ${s.nextKm || s.nextDate ? `
+            <div style="font-size:0.72rem;color:var(--text-muted);">
+              Próx: ${s.nextKm ? `<strong style="color:var(--text-secondary);">${s.nextKm.toLocaleString('pt-BR')} km</strong>` : ''}
+              ${s.nextDate ? `<strong style="color:var(--text-secondary);">${formatDate(s.nextDate)}</strong>` : ''}
+            </div>
+          ` : ''}
         </div>
       </div>
     `;
   }).join('');
+}
+
+// Vincula os botões ✏️ Editar/Registrar na aba de Revisões
+function bindReminderEditButtons() {
+  document.querySelectorAll('.btn-edit-reminder').forEach(btn => {
+    // Evitar duplicar listeners
+    btn.replaceWith(btn.cloneNode(true));
+  });
+  document.querySelectorAll('.btn-edit-reminder').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const itemId = btn.dataset.itemId;
+      const item   = MAINTENANCE_ITEMS.find(i => i.id === itemId);
+      if (!item || !_vehicle || !_user) return;
+      openQuickRegisterModal({
+        item,
+        vehicle:     _vehicle,
+        user:        _user,
+        lastService: _lastMap[itemId] || null,
+        onSaved:     _reloadFn,
+      });
+    });
+  });
 }
 
 function renderHistoryTab(services, vehicleId) {
