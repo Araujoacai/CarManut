@@ -12,6 +12,8 @@ let _vehicle = null;
 let _lastMap = {};
 let _user    = null;
 let _reloadFn = null;
+let _currentCat = 'all';
+let _itemStatuses = [];
 
 export async function renderVehicleDetail(container, user, params = {}) {
   const { vehicleId } = params;
@@ -51,6 +53,7 @@ export async function renderVehicleDetail(container, user, params = {}) {
       status: calcMaintenanceStatus(item, last?.km ?? null, last?.date ?? null, vehicle.currentKm || 0)
     };
   });
+  _itemStatuses = itemStatuses;
 
   const overdueItems = itemStatuses.filter(i => i.status.status === 'overdue');
   const warningItems = itemStatuses.filter(i => i.status.status === 'warning');
@@ -113,7 +116,7 @@ export async function renderVehicleDetail(container, user, params = {}) {
 
       <!-- Tab: Reminders -->
       <div class="tab-content active" id="tab-reminders">
-        ${renderRemindersTab(itemStatuses, vehicle)}
+        ${renderRemindersTab(_itemStatuses, vehicle, _currentCat)}
       </div>
 
       <!-- Tab: History -->
@@ -169,6 +172,7 @@ export async function renderVehicleDetail(container, user, params = {}) {
 
   // Botões de editar/registrar item de manutenção (aba Revisões)
   bindReminderEditButtons();
+  bindReminderFilters();
 
   // Delete service
   document.querySelectorAll('.btn-delete-service').forEach(btn => {
@@ -189,19 +193,45 @@ export async function renderVehicleDetail(container, user, params = {}) {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (btn.dataset.tab === 'reminders') {
-        requestAnimationFrame(bindReminderEditButtons);
+        requestAnimationFrame(() => {
+          bindReminderFilters();
+          bindReminderEditButtons();
+        });
       }
     });
   });
 }
 
-function renderRemindersTab(itemStatuses, vehicle) {
-  const sorted = [...itemStatuses].sort((a, b) => {
+function renderRemindersTab(itemStatuses, vehicle, currentCat = 'all') {
+  const availableCats = new Set(itemStatuses.map(i => i.category));
+  const catChips = [
+    { id: 'all', label: 'Todos', emoji: '📋' },
+    ...SERVICE_CATEGORIES.filter(c => availableCats.has(c.id))
+  ];
+
+  const chipsHtml = `
+    <div class="filter-chips" style="margin-bottom:16px;">
+      ${catChips.map(c => `
+        <button class="filter-chip cat-chip ${currentCat === c.id ? 'active' : ''}" data-cat="${c.id}">
+          ${c.emoji} ${c.label}
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  let filtered = itemStatuses;
+  if (currentCat !== 'all') {
+    filtered = itemStatuses.filter(i => i.category === currentCat);
+  }
+
+  const sorted = [...filtered].sort((a, b) => {
     const order = { overdue: 0, warning: 1, ok: 2 };
     return order[a.status.status] - order[b.status.status];
   });
 
-  return sorted.map(item => {
+  const listHtml = sorted.length === 0 
+    ? `<div class="empty-state" style="padding:40px 20px;"><div class="empty-icon">✅</div><div class="empty-title">Nenhum item nesta categoria</div></div>`
+    : sorted.map(item => {
     const s   = item.status;
     const pct = Math.min(s.percent, 100);
     const last = item.last;
@@ -260,6 +290,26 @@ function renderRemindersTab(itemStatuses, vehicle) {
       </div>
     `;
   }).join('');
+
+  return chipsHtml + listHtml;
+}
+
+// Vincula filtros de categoria
+function bindReminderFilters() {
+  document.querySelectorAll('.cat-chip').forEach(chip => {
+    chip.replaceWith(chip.cloneNode(true));
+  });
+  document.querySelectorAll('.cat-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      _currentCat = chip.dataset.cat;
+      const tab = document.getElementById('tab-reminders');
+      if (tab && _vehicle) {
+        tab.innerHTML = renderRemindersTab(_itemStatuses, _vehicle, _currentCat);
+        bindReminderFilters();
+        bindReminderEditButtons();
+      }
+    });
+  });
 }
 
 // Vincula os botões ✏️ Editar/Registrar na aba de Revisões
