@@ -9,6 +9,7 @@ import { renderVehicleDetail } from './pages/vehicle-detail.js';
 import { renderAddService }    from './pages/add-service.js';
 import { renderReminders }     from './pages/reminders.js';
 import { renderSettings }      from './pages/settings.js';
+import { initNotifications }   from './notifications.js';
 
 // ============================================================
 // Router
@@ -178,17 +179,24 @@ function init() {
     router.user = user;
 
     if (user) {
-      // Logged in
       if (!router.current || router.current === 'login') {
         router.navigate('home');
       } else {
         router.render();
       }
+      // Inicializa notificações após login (não bloqueia)
+      initNotifications(user).catch(console.warn);
     } else {
-      // Logged out
       router.current = null;
       router.history = [];
       router.render();
+    }
+  });
+
+  // Ouvir mensagens do Service Worker (clique em notificação)
+  navigator.serviceWorker?.addEventListener('message', event => {
+    if (event.data?.type === 'NAVIGATE') {
+      router.navigate('reminders');
     }
   });
 
