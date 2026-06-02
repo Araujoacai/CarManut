@@ -32,7 +32,7 @@ export const MAINTENANCE_ITEMS = [
     kmInterval: 10000,
     monthInterval: 12,
     severity: 'critical',
-    note: 'Use óleo 10W30 (mineral/semissintético). Motor R18A — troca rigorosa preserva a corrente de comando.',
+    note: 'Use óleo 10W30 (mineral/semissintético). Motor R18A1: capacidade com filtro é de 3,7 Litros (sem filtro 3,5 L). Troca rigorosa preserva a corrente de comando.',
   },
   {
     id: 'air_filter',
@@ -84,7 +84,7 @@ export const MAINTENANCE_ITEMS = [
     kmInterval: 40000,
     monthInterval: null,
     severity: 'high',
-    note: 'Específico do motor R18A. Regulagem evita consumo elevado e instabilidade na marcha lenta. Muito importante!',
+    note: 'Específico do motor R18A1 (A frio) — Admissão: 0.18-0.22 mm | Escape: 0.23-0.27 mm. Regulagem evita consumo elevado e instabilidade.',
   },
   {
     id: 'accessory_belt',
@@ -222,7 +222,7 @@ export const MAINTENANCE_ITEMS = [
     kmInterval: 45000,
     monthInterval: null,
     severity: 'medium',
-    note: 'Use Honda MTF original. Câmbio manual — verificar nível e trocar. Torque do bujão: 39 Nm.',
+    note: 'Manual: Honda MTF (Torque bujão 39 Nm). Automático: Honda ATF-Z1 (Capacidade na troca: 2,4 Litros).',
   },
   {
     id: 'clutch',
@@ -295,9 +295,11 @@ export const VEHICLE_PRESETS = {
     brakeFluid: 'DOT 3',
     emoji: '🚗',
     notes: [
-      'Motor R18A usa CORRENTE de comando — não requer troca periódica (se óleo em dia)',
+      'Motor R18A1 usa CORRENTE de comando — não requer troca periódica (se óleo em dia)',
+      'Capacidade de óleo do motor R18A1: 3,7 Litros (com troca do filtro)',
+      'Folga das Válvulas (A frio): Admissão 0.18-0.22 mm | Escape 0.23-0.27 mm',
+      'Válvula termostática: Início de abertura aos 80°C / Abertura total aos 95°C',
       'Direção hidráulica — verificar nível e vazamentos regularmente',
-      'Regulagem de válvulas a cada 40.000 km é muito importante neste motor',
       'Velas originais de irídio têm vida útil de 60.000 km',
     ],
     maintenanceOverrides: {
