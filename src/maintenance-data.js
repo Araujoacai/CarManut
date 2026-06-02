@@ -153,12 +153,12 @@ export const MAINTENANCE_ITEMS = [
   {
     id: 'thermostat',
     category: 'cooling',
-    name: 'Termostato',
+    name: 'Válvula Termostática',
     emoji: '🌡️',
     kmInterval: 80000,
     monthInterval: null,
     severity: 'medium',
-    note: 'Verificar funcionamento. Troca preventiva se o motor demorar a aquecer ou superaquecer.',
+    note: 'Motor R18A1: compre a válvula original que começa a abrir aos 80°C e abre totalmente aos 95°C. Evite válvulas paralelas que abrem mais tarde, pois causam superaquecimento.',
   },
 
   // === SUSPENSÃO & DIREÇÃO ===
