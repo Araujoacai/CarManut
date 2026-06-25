@@ -2,7 +2,7 @@
 // vehicle-detail.js — Detalhe do Veículo (Histórico + Revisões)
 // ============================================================
 import { getVehicle, getServices, updateKm, deleteService, buildLastServiceMap } from '../db.js';
-import { MAINTENANCE_ITEMS, calcMaintenanceStatus, formatKm, formatDate, formatCurrency, SERVICE_CATEGORIES } from '../maintenance-data.js';
+import { MAINTENANCE_ITEMS, calcMaintenanceStatus, formatKm, formatDate, formatCurrency, SERVICE_CATEGORIES, VEHICLE_TECHNICAL_DATA } from '../maintenance-data.js';
 import { showToast } from '../components/toast.js';
 import { openQuickRegisterModal } from '../components/quick-register-modal.js';
 import { router } from '../app.js';
@@ -110,6 +110,7 @@ export async function renderVehicleDetail(container, user, params = {}) {
       <!-- Tabs -->
       <div class="tabs">
         <button class="tab-btn active" data-tab="reminders">Revisões</button>
+        <button class="tab-btn" data-tab="manual">📝 Manual</button>
         <button class="tab-btn" data-tab="history">Histórico</button>
         <button class="tab-btn" data-tab="info">Info</button>
       </div>
@@ -117,6 +118,11 @@ export async function renderVehicleDetail(container, user, params = {}) {
       <!-- Tab: Reminders -->
       <div class="tab-content active" id="tab-reminders">
         ${renderRemindersTab(_itemStatuses, vehicle, _currentCat)}
+      </div>
+
+      <!-- Tab: Manual -->
+      <div class="tab-content" id="tab-manual">
+        ${renderManualTab(vehicle)}
       </div>
 
       <!-- Tab: History -->
@@ -173,6 +179,7 @@ export async function renderVehicleDetail(container, user, params = {}) {
   // Botões de editar/registrar item de manutenção (aba Revisões)
   bindReminderEditButtons();
   bindReminderFilters();
+  bindManualAccordion();
 
   // Delete service
   document.querySelectorAll('.btn-delete-service').forEach(btn => {
@@ -189,7 +196,7 @@ export async function renderVehicleDetail(container, user, params = {}) {
     });
   });
 
-  // Re-bind quando trocar de aba (histórico não tem esses botões)
+  // Re-bind quando trocar de aba
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (btn.dataset.tab === 'reminders') {
@@ -197,6 +204,9 @@ export async function renderVehicleDetail(container, user, params = {}) {
           bindReminderFilters();
           bindReminderEditButtons();
         });
+      }
+      if (btn.dataset.tab === 'manual') {
+        requestAnimationFrame(bindManualAccordion);
       }
     });
   });
@@ -312,6 +322,30 @@ function bindReminderFilters() {
   });
 }
 
+// Vincula acordeão da aba Manual
+function bindManualAccordion() {
+  document.querySelectorAll('.manual-section-header').forEach(header => {
+    // Remove old listeners
+    const newHeader = header.cloneNode(true);
+    header.replaceWith(newHeader);
+    newHeader.addEventListener('click', () => {
+      const idx = newHeader.dataset.sectionIdx;
+      const body = document.querySelector(`[data-section-body="${idx}"]`);
+      const chevron = newHeader.querySelector('.manual-chevron');
+      if (!body) return;
+
+      const isOpen = body.style.display !== 'none';
+      body.style.display = isOpen ? 'none' : 'block';
+      if (chevron) {
+        chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+      }
+      newHeader.style.borderRadius = isOpen
+        ? 'var(--radius-lg)'
+        : 'var(--radius-lg) var(--radius-lg) 0 0';
+    });
+  });
+}
+
 // Vincula os botões ✏️ Editar/Registrar na aba de Revisões
 function bindReminderEditButtons() {
   document.querySelectorAll('.btn-edit-reminder').forEach(btn => {
@@ -375,6 +409,79 @@ function renderHistoryTab(services, vehicleId) {
       `;
     }).join('')}
   </div>`;
+}
+
+function renderManualTab(vehicle) {
+  // Match vehicle to technical data
+  const key = 'honda_civic_2008_lxs_1.8'; // default for now
+  const techData = VEHICLE_TECHNICAL_DATA[key];
+
+  if (!techData) {
+    return `
+      <div class="empty-state" style="padding:40px 20px;">
+        <div class="empty-icon">📋</div>
+        <div class="empty-title">Dados técnicos não disponíveis</div>
+        <div class="empty-subtitle">Ainda não temos dados do manual para este veículo.</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div style="margin-bottom:8px;">
+      <div style="
+        background:linear-gradient(135deg, rgba(245,158,11,0.08), rgba(245,158,11,0.02));
+        border:1px solid rgba(245,158,11,0.15);
+        border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px;
+      ">
+        <div style="font-size:0.8rem;font-weight:700;color:var(--amber-500);margin-bottom:4px;">
+          📖 Dados do Manual de Serviço
+        </div>
+        <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.6;">
+          Honda Civic 1.8 LXS/LX/EXS (2006–2011) — Motor R18A1 SOHC i-VTEC.
+          Informações extraídas do manual oficial para manutenção preventiva e corretiva.
+        </div>
+      </div>
+
+      ${techData.sections.map((section, idx) => `
+        <div class="manual-section" style="margin-bottom:12px;">
+          <button class="manual-section-header" data-section-idx="${idx}" style="
+            width:100%;text-align:left;padding:14px 16px;
+            background:var(--surface-2);border:1px solid rgba(255,255,255,0.06);
+            border-radius:var(--radius-lg);cursor:pointer;
+            display:flex;align-items:center;justify-content:space-between;
+            transition:all 0.15s;
+          ">
+            <span style="font-size:0.88rem;font-weight:700;color:var(--text-primary);">
+              ${section.title}
+            </span>
+            <span class="manual-chevron" style="
+              color:var(--text-muted);font-size:0.7rem;
+              transition:transform 0.2s;
+            ">▼</span>
+          </button>
+          <div class="manual-section-body" data-section-body="${idx}" style="
+            display:none;
+            background:var(--surface-1);
+            border:1px solid rgba(255,255,255,0.04);
+            border-top:none;
+            border-radius:0 0 var(--radius-lg) var(--radius-lg);
+            overflow:hidden;
+          ">
+            ${section.items.map((item, i) => `
+              <div style="
+                padding:10px 16px;
+                display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+                ${i < section.items.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.04);' : ''}
+              ">
+                <span style="font-size:0.78rem;color:var(--text-muted);min-width:0;flex-shrink:0;">${item.label}</span>
+                <span style="font-size:0.78rem;color:var(--text-primary);font-weight:600;text-align:right;word-break:break-word;">${item.value}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 function renderInfoTab(vehicle) {
